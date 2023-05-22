@@ -29,6 +29,7 @@ public class CustomerOnboarding {
         final ApiClient client = new ApiClient().setBasePath(configuration.DOT_IDENTITY_SERVICE_URL);
         client.setBearerToken(configuration.DOT_AUTHENTICATION_TOKEN);
         final CustomerOnboardingApi customerOnboardingApi = new CustomerOnboardingApi(client);
+        final FaceOperationsApi faceApi = new FaceOperationsApi(client);
 
         try {
             final CreateCustomerResponse customerResponse = customerOnboardingApi.createCustomer();
@@ -88,6 +89,30 @@ public class CustomerOnboarding {
             }
 
             LOG.info("Customer: " + customer);
+            LOG.info("Customer age is: " + customer.getAge().getMrz());
+
+
+            //String faceId = faceApi.detect(new CreateFaceRequest().image(new Image().url(configuration.EXAMPLE_IMAGE_URL))).getId();
+            String faceId = faceApi.detect(new CreateFaceRequest().image(new Image().data(getDetectionImage()))).getId();
+            LOG.info("Face detected with id: " + faceId);
+
+            FaceMaskResponse faceMaskResponse = faceApi.checkFaceMask(faceId);
+            boolean maskDetected = faceMaskResponse.getScore() > configuration.WEARABLES_FACE_MASK_THRESHOLD;
+            LOG.info("Face mask detected on face image: " + maskDetected);
+
+            CustomerInspectResponse customerInspectResponse = customerOnboardingApi.inspect(customerId);
+            boolean hasMask = customerInspectResponse.getSelfieInspection().getHasMask();
+            LOG.info("Face mask detected from selfie inspection: " + hasMask);
+
+            if (!maskDetected && !hasMask && Integer.parseInt(customer.getAge().getMrz()) >= 18){
+                LOG.info("Customer is eligible");
+            }else{
+                LOG.info("Customer is not eligible");
+            }
+
+
+            LOG.info("Deleting face with id: " + faceId);
+            faceApi.deleteFace(faceId);
 
             ImageCrop frontPage = customerOnboardingApi.documentPageCrop(customerId, "front", null, null);
             saveImage(frontPage.getData(), "document-front.png");
